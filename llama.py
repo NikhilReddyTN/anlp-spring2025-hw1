@@ -44,6 +44,8 @@ class RMSNorm(torch.nn.Module):
             torch.Tensor: The normalized tensor.
         """
         # todo
+        rms=torch.sqrt(self.eps+torch.mean(torch.square(x),dim=-1,keepdim=True))
+        return x/rms
         raise NotImplementedError
 
     def forward(self, x):
@@ -94,6 +96,10 @@ class Attention(nn.Module):
         attention matrix before applying it to the value tensor.
         '''
         # todo
+        attention=F.softmax((query@key.transpose(-2,-1))* (1.0/ torch.sqrt(torch.tensor(key.size(-1)))),dim=-1)
+        attention=self.attn_dropout(attention)
+        out=attention@value
+        return out
         raise NotImplementedError
 
     def forward(
@@ -197,6 +203,13 @@ class LlamaLayer(nn.Module):
            output of the feed-forward network
         '''
         # todo
+        x1=self.attention_norm(x)
+        out1=self.attention(x1)
+        y1=x+out1
+        x2=self.ffn_norm(y1)
+        out2=self.feed_forward(x2)
+        y_out=y1+out2
+        return y_out
         raise NotImplementedError
 
 class Llama(LlamaPreTrainedModel):
@@ -274,11 +287,11 @@ class Llama(LlamaPreTrainedModel):
             logits, _ = self(idx_cond)
             logits = logits[:, -1, :] # crop to just the final time step
             # todo
-            raise NotImplementedError
+            # raise NotImplementedError
 
             if temperature == 0.0:
                 # select the single most likely index
-                idx_next = None
+                idx_next = torch.argmax(logits,dim=-1,keepdim=True) 
             else:
                 '''
                 Perform temperature sampling with top-p (nucleus) sampling:
@@ -288,7 +301,16 @@ class Llama(LlamaPreTrainedModel):
                 4) Filter and normalize the resulting probabilities.
                 5) Sample from this scaled probability distribution.
                 '''
-                idx_next = None
+                
+                logits=logits/temperature
+                probs=torch.softmax(logits,dim=-1)
+                sortedVals, sortedIndex=torch.sort(probs,dim=-1,descending=True)
+                cum_probs=torch.cumsum(sortedVals,dim=-1)
+                top_probs=torch.where(cum_probs<top_p,sortedVals,float('-inf'))
+                new_probs=torch.softmax(top_probs,dim=-1)
+                best_index=torch.multinomial(new_probs,1)
+                final_words= sortedIndex.gather(-1,best_index)
+                return final_words
             # append sampled index to the running sequence and continue
             idx = torch.cat((idx, idx_next), dim=1)
 
