@@ -305,12 +305,16 @@ class Llama(LlamaPreTrainedModel):
                 logits=logits/temperature
                 probs=torch.softmax(logits,dim=-1)
                 sortedVals, sortedIndex=torch.sort(probs,dim=-1,descending=True)
-                cum_probs=torch.cumsum(sortedVals,dim=-1)
-                top_probs=torch.where(cum_probs<top_p,sortedVals,float('-inf'))
+                if(sortedVals[0][0]>=top_p):
+                    top_probs=torch.full((sortedVals.shape[0], sortedVals.shape[1]), float('-inf'))
+                    top_probs[0][0]=sortedVals[0][0]
+                else:
+                    cum_probs=torch.cumsum(sortedVals,dim=-1)
+                    top_probs=torch.where(cum_probs<top_p,sortedVals,float('-inf'))
                 new_probs=torch.softmax(top_probs,dim=-1)
                 best_index=torch.multinomial(new_probs,1)
-                final_words= sortedIndex.gather(-1,best_index)
-                return final_words
+                idx_next= sortedIndex.gather(-1,best_index)
+            
             # append sampled index to the running sequence and continue
             idx = torch.cat((idx, idx_next), dim=1)
 

@@ -30,21 +30,18 @@ class AdamW(Optimizer):
         loss = None
         if closure is not None:
             loss = closure()
-
         for group in self.param_groups:
-
             # TODO: Clip gradients if max_grad_norm is set
             if group['max_grad_norm'] is not None:
-                raise NotImplementedError()
-            
+                torch.nn.utils.clip_grad_norm_(group['params'],group["max_grad_norm"])
+                # raise NotImplementedError()  
             for p in group["params"]:
                 if p.grad is None:
                     continue
                 grad = p.grad.data
                 if grad.is_sparse:
                     raise RuntimeError("Adam does not support sparse gradients, please consider SparseAdam instead")
-
-                raise NotImplementedError()
+                # raise NotImplementedError()
 
                 # State should be stored in this dictionary
                 state = self.state[p]
@@ -53,14 +50,22 @@ class AdamW(Optimizer):
                 alpha = group["lr"]
 
                 # TODO: Update first and second moments of the gradients
-
+                if len(state) == 0:
+                    state['m']=0
+                    state['v']=0
+                    state['step']=0
+                state['step']+=1
+                beta1,beta2=group["betas"]
+                m= beta1*state['m'] + (1-beta1)*grad
+                v= beta2*state['v'] + (1-beta2)*(grad*grad)
+                state['m']=m
+                state['v']=v
                 # TODO: Bias correction
                 # Please note that we are using the "efficient version" given in
                 # https://arxiv.org/abs/1412.6980
-
+                lr=alpha*((1-beta2**state['step'])**0.5) / (1-beta1**state['step'])
                 # TODO: Update parameters
-
+                p.data=p.data-lr*(m/(torch.sqrt(v)+group['eps']) + group['weight_decay']*p.data)
                 # TODO: Add weight decay after the main gradient-based updates.
                 # Please note that the learning rate should be incorporated into this update.
-
         return loss
